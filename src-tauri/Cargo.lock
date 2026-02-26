@@ -1556,6 +1556,8 @@ dependencies = [
  "aes-gcm",
  "base64 0.22.1",
  "dashmap",
+ "jni",
+ "ndk-context",
  "serde",
  "serde_json",
  "tauri",

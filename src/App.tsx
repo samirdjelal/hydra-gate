@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ProxyList } from "./components/ProxyList";
 import { AddProxyModal } from "./components/AddProxyModal";
+import { DeleteProxyModal } from "./components/DeleteProxyModal";
 import { SettingsPage } from "./components/SettingsPage";
 import { Proxy } from "./types";
-import { Plus, Power, Layers, Settings, Network } from "lucide-react";
+import { Plus, Power, Layers, Settings } from "lucide-react";
 
 type Page = "proxies" | "settings";
 
@@ -12,6 +13,7 @@ function App() {
   const [proxies, setProxies] = useState<Proxy[]>([]);
   const [isServerActive, setIsServerActive] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [proxyToDelete, setProxyToDelete] = useState<Proxy | null>(null);
   const [page, setPage] = useState<Page>("proxies");
   const [listenPort, setListenPort] = useState<number>(10808);
   const [listenHost, setListenHost] = useState<string>("127.0.0.1");
@@ -89,10 +91,20 @@ function App() {
     setShowAddModal(false);
   };
 
+  const handleDeleteProxy = async (id: string) => {
+    try {
+      await invoke("remove_proxy", { id });
+      await fetchProxies();
+    } catch (e) {
+      console.error("Failed to remove proxy:", e);
+    }
+    setProxyToDelete(null);
+  };
+
   const aliveCount = proxies.filter(p => p.is_alive).length;
 
   const navItems: { id: Page; icon: React.ReactNode; label: string }[] = [
-    { id: "proxies", icon: <Network className="w-4 h-4" />, label: "Proxies" },
+    { id: "proxies", icon: <Layers className="w-4 h-4" />, label: "Proxies" },
     { id: "settings", icon: <Settings className="w-4 h-4" />, label: "Settings" },
   ];
 
@@ -213,7 +225,7 @@ function App() {
                 Add Proxy
               </button>
             </div>
-            <ProxyList proxies={proxies} />
+            <ProxyList proxies={proxies} onLongPress={(proxy) => setProxyToDelete(proxy)} />
           </section>
         ) : (
           <SettingsPage isServerActive={isServerActive} />
@@ -224,6 +236,14 @@ function App() {
         <AddProxyModal
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddProxy}
+        />
+      )}
+
+      {proxyToDelete && (
+        <DeleteProxyModal
+          proxy={proxyToDelete}
+          onClose={() => setProxyToDelete(null)}
+          onConfirm={handleDeleteProxy}
         />
       )}
     </div>

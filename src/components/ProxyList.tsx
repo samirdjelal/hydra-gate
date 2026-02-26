@@ -1,8 +1,10 @@
+import { useRef } from "react";
 import { Proxy } from "../types";
 import { Activity, ServerOff, Shield, ShieldOff } from "lucide-react";
 
 interface ProxyListProps {
     proxies: Proxy[];
+    onLongPress: (proxy: Proxy) => void;
 }
 
 function LatencyBadge({ ms }: { ms?: number | null }) {
@@ -21,7 +23,24 @@ function LatencyBadge({ ms }: { ms?: number | null }) {
     );
 }
 
-export function ProxyList({ proxies }: ProxyListProps) {
+export function ProxyList({ proxies, onLongPress }: ProxyListProps) {
+    const timerRef = useRef<number | null>(null);
+
+    const startPress = (p: Proxy) => {
+        if (timerRef.current) return;
+        timerRef.current = window.setTimeout(() => {
+            onLongPress(p);
+            timerRef.current = null;
+        }, 600); // 600ms long press threshold
+    };
+
+    const cancelPress = () => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+    };
+
     if (proxies.length === 0) {
         return (
             <div className="gradient-border flex flex-col items-center justify-center p-12 bg-hydra-card rounded-2xl text-gray-600">
@@ -45,9 +64,15 @@ export function ProxyList({ proxies }: ProxyListProps) {
                         border border-transparent
                         hover:bg-hydra-card-hover
                         transition-all duration-200
-                        animate-fade-up
+                        animate-fade-up select-none
                     "
                     style={{ animationDelay: `${i * 40}ms` }}
+                    onMouseDown={() => startPress(p)}
+                    onMouseUp={cancelPress}
+                    onMouseLeave={cancelPress}
+                    onTouchStart={() => startPress(p)}
+                    onTouchEnd={cancelPress}
+                    onTouchMove={cancelPress}
                 >
                     {/* Status indicator */}
                     <div className="flex items-center gap-4">

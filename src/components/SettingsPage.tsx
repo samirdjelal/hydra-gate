@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
     Settings, X, AlertTriangle, CheckCircle2,
-    Shuffle, BarChart2, Gauge, Scale, Link2, Pin, Globe, Lock
+    Shuffle, BarChart2, Gauge, Scale, Link2, Pin, Globe, Lock, Network
 } from "lucide-react";
 
 interface SettingsPageProps {
@@ -81,6 +81,9 @@ export function SettingsPage({ isServerActive }: SettingsPageProps) {
     const [activeMode, setActiveMode] = useState<ModeId>("round_robin");
     const [savingMode, setSavingMode] = useState<ModeId | null>(null);
 
+    // ── VPN state ───────────────────────────────────────────────────────────
+    const [isVpnActive, setIsVpnActive] = useState(false);
+
     useEffect(() => {
         invoke<number>("get_listen_port").then(p => {
             setSavedPort(p);
@@ -126,7 +129,6 @@ export function SettingsPage({ isServerActive }: SettingsPageProps) {
         }
     };
 
-    // ── Rotation handlers ────────────────────────────────────────────────────
     const handleSelectMode = async (id: ModeId) => {
         if (id === activeMode) return;
         setSavingMode(id);
@@ -137,6 +139,22 @@ export function SettingsPage({ isServerActive }: SettingsPageProps) {
             console.error("Failed to set rotation mode:", e);
         } finally {
             setSavingMode(null);
+        }
+    };
+
+    // ── VPN Handler ─────────────────────────────────────────────────────────
+    const toggleVpn = async () => {
+        const newState = !isVpnActive;
+        try {
+            if (newState) {
+                await invoke("start_vpn");
+            } else {
+                await invoke("stop_vpn");
+            }
+            setIsVpnActive(newState);
+        } catch (e) {
+            console.error(e);
+            alert("Failed to toggle VPN (Is this running on Android?)");
         }
     };
 
@@ -156,6 +174,32 @@ export function SettingsPage({ isServerActive }: SettingsPageProps) {
                     <h2 className="text-sm font-semibold text-white">Settings</h2>
                     <p className="text-xs text-gray-600">Profile &amp; routing configuration</p>
                 </div>
+            </div>
+
+            {/* ── Android VPN Mode ─────────────────────────────────────────────────── */}
+            <div className="gradient-border bg-hydra-card rounded-2xl overflow-hidden p-5 flex items-center justify-between">
+                <div>
+                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                        <Network className="w-4 h-4 text-blue-400" /> System VPN Mode
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-1 max-w-[250px]">
+                        Route all Android device traffic through HydraGate. (Requires system permission)
+                    </p>
+                </div>
+
+                <button
+                    onClick={toggleVpn}
+                    className={`
+                        group relative flex items-center gap-2.5 px-4 py-2 rounded-xl font-semibold text-sm
+                        transition-all duration-300 outline-none
+                        ${isVpnActive
+                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/25 hover:bg-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.15)]'
+                            : 'bg-hydra-dark text-gray-400 border border-hydra-border hover:border-gray-500 hover:text-white hover:bg-hydra-card-hover'
+                        }
+                    `}
+                >
+                    <span>{isVpnActive ? 'VPN Active' : 'Enable VPN'}</span>
+                </button>
             </div>
 
             {/* ── Listen Endpoint (Interface + Port unified card) ───────────── */}

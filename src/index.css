@@ -38,6 +38,12 @@ body {
     radial-gradient(ellipse 40% 30% at 80% 80%, rgba(99, 102, 241, 0.05) 0%, transparent 50%);
   color: white;
   font-family: 'Inter', system-ui, Helvetica, Arial, sans-serif;
+  
+  /* Safe Area for Android / iOS mobile devices */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 /* Custom scrollbar */
