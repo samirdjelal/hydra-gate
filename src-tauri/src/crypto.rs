@@ -1,8 +1,8 @@
+use aes_gcm::aead::rand_core::RngCore;
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
 };
-use aes_gcm::aead::rand_core::RngCore;
 use std::fs;
 use std::path::PathBuf;
 use thiserror::Error;
@@ -36,17 +36,19 @@ fn get_or_create_key(app_dir: &PathBuf) -> Result<[u8; 32], CryptoError> {
 pub fn encrypt_proxies(app_dir: &PathBuf, plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
     let key = get_or_create_key(app_dir)?;
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| CryptoError::GcmError)?;
-    
+
     let mut nonce_bytes = [0u8; 12];
     OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
 
-    let mut ciphertext = cipher.encrypt(nonce, plaintext).map_err(|_| CryptoError::GcmError)?;
-    
+    let mut ciphertext = cipher
+        .encrypt(nonce, plaintext)
+        .map_err(|_| CryptoError::GcmError)?;
+
     // Prepend nonce to ciphertext
     let mut result = nonce_bytes.to_vec();
     result.append(&mut ciphertext);
-    
+
     Ok(result)
 }
 
@@ -56,10 +58,12 @@ pub fn decrypt_proxies(app_dir: &PathBuf, data: &[u8]) -> Result<Vec<u8>, Crypto
     }
     let key = get_or_create_key(app_dir)?;
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| CryptoError::GcmError)?;
-    
+
     let nonce = Nonce::from_slice(&data[0..12]);
     let ciphertext = &data[12..];
-    
-    let plaintext = cipher.decrypt(nonce, ciphertext).map_err(|_| CryptoError::GcmError)?;
+
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| CryptoError::GcmError)?;
     Ok(plaintext)
 }

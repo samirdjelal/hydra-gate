@@ -1,6 +1,6 @@
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use dashmap::DashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Proxy {
@@ -59,25 +59,25 @@ pub enum RotationMode {
 impl RotationMode {
     pub fn as_str(&self) -> &'static str {
         match self {
-            RotationMode::RoundRobin   => "round_robin",
-            RotationMode::Random       => "random",
+            RotationMode::RoundRobin => "round_robin",
+            RotationMode::Random => "random",
             RotationMode::LeastLatency => "least_latency",
-            RotationMode::Weighted     => "weighted",
-            RotationMode::TimeSticky   => "time_sticky",
-            RotationMode::IpSticky     => "ip_sticky",
+            RotationMode::Weighted => "weighted",
+            RotationMode::TimeSticky => "time_sticky",
+            RotationMode::IpSticky => "ip_sticky",
         }
     }
 
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "round_robin"   => Some(RotationMode::RoundRobin),
-            "random"        => Some(RotationMode::Random),
+            "round_robin" => Some(RotationMode::RoundRobin),
+            "random" => Some(RotationMode::Random),
             "least_latency" => Some(RotationMode::LeastLatency),
-            "weighted"      => Some(RotationMode::Weighted),
-            "time_sticky"   => Some(RotationMode::TimeSticky),
-            "ip_sticky"     => Some(RotationMode::IpSticky),
+            "weighted" => Some(RotationMode::Weighted),
+            "time_sticky" => Some(RotationMode::TimeSticky),
+            "ip_sticky" => Some(RotationMode::IpSticky),
             // legacy alias kept for backward-compat
-            "sticky"        => Some(RotationMode::TimeSticky),
+            "sticky" => Some(RotationMode::TimeSticky),
             _ => None,
         }
     }

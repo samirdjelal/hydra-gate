@@ -46,11 +46,7 @@ impl ProxyServer {
     }
 
     pub fn get_rotation_mode(&self) -> String {
-        self.rotation_mode
-            .lock()
-            .unwrap()
-            .as_str()
-            .to_string()
+        self.rotation_mode.lock().unwrap().as_str().to_string()
     }
 
     pub fn set_rotation_mode(&self, mode: RotationMode) {
@@ -62,12 +58,12 @@ impl ProxyServer {
             return;
         }
 
-        let pool          = self.pool.clone();
-        let running       = self.is_running.clone();
-        let port          = self.listen_port.load(Ordering::SeqCst);
-        let host          = self.listen_host.lock().unwrap().clone();
+        let pool = self.pool.clone();
+        let running = self.is_running.clone();
+        let port = self.listen_port.load(Ordering::SeqCst);
+        let host = self.listen_host.lock().unwrap().clone();
         let rotation_mode = self.rotation_mode.clone();
-        let rr_idx        = self.round_robin_idx.clone();
+        let rr_idx = self.round_robin_idx.clone();
 
         tauri::async_runtime::spawn(async move {
             let addr = format!("{}:{}", host, port);
@@ -83,13 +79,12 @@ impl ProxyServer {
             println!("Local proxy listening on {}", addr);
 
             while running.load(Ordering::SeqCst) {
-                if let Ok(Ok((mut client_stream, _))) = tokio::time::timeout(
-                    std::time::Duration::from_secs(1),
-                    listener.accept(),
-                ).await {
-                    let p           = pool.clone();
-                    let mode        = rotation_mode.lock().unwrap().clone();
-                    let idx         = rr_idx.clone();
+                if let Ok(Ok((mut client_stream, _))) =
+                    tokio::time::timeout(std::time::Duration::from_secs(1), listener.accept()).await
+                {
+                    let p = pool.clone();
+                    let mode = rotation_mode.lock().unwrap().clone();
+                    let idx = rr_idx.clone();
 
                     tauri::async_runtime::spawn(async move {
                         if let Err(e) = handle_client(&mut client_stream, p, mode, idx).await {
@@ -145,18 +140,22 @@ fn select_proxy<'a>(
         }
 
         // ── Least Latency ───────────────────────────────────────────────────
-        RotationMode::LeastLatency => {
-            alive.iter().min_by_key(|p| p.latency_ms.unwrap_or(u64::MAX))
-        }
+        RotationMode::LeastLatency => alive
+            .iter()
+            .min_by_key(|p| p.latency_ms.unwrap_or(u64::MAX)),
 
         // ── Weighted (inversely proportional to latency) ─────────────────
         RotationMode::Weighted => {
             const MAX_MS: u64 = 10_000;
             const DEFAULT_WEIGHT: u64 = MAX_MS / 2;
 
-            let weights: Vec<u64> = alive.iter().map(|p| {
-                MAX_MS.saturating_sub(p.latency_ms.unwrap_or(DEFAULT_WEIGHT).min(MAX_MS - 1)) + 1
-            }).collect();
+            let weights: Vec<u64> = alive
+                .iter()
+                .map(|p| {
+                    MAX_MS.saturating_sub(p.latency_ms.unwrap_or(DEFAULT_WEIGHT).min(MAX_MS - 1))
+                        + 1
+                })
+                .collect();
 
             let total: u64 = weights.iter().sum();
             if total == 0 {
@@ -212,7 +211,10 @@ async fn handle_client(
     let mut buf = [0u8; 256];
     client.read_exact(&mut buf[0..2]).await?;
     if buf[0] != 0x05 {
-        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Not SOCKS5"));
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Not SOCKS5",
+        ));
     }
     let n_methods = buf[1] as usize;
     client.read_exact(&mut buf[0..n_methods]).await?;
@@ -274,16 +276,24 @@ async fn handle_client(
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No alive proxies"))?;
 
     let proxy_addr = format!("{}:{}", selected.host, selected.port);
-    let target     = format!("{}:{}", target_addr, target_port);
+    let target = format!("{}:{}", target_addr, target_port);
 
-    println!("[Proxy] Selected {} ({}) for target {}", selected.id, proxy_addr, target);
+    println!(
+        "[Proxy] Selected {} ({}) for target {}",
+        selected.id, proxy_addr, target
+    );
 
     if selected.protocol == "http" || selected.protocol == "https" {
         let mut st = match tokio::net::TcpStream::connect(&proxy_addr).await {
             Ok(s) => s,
             Err(e) => {
-                client.write_all(&[0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
-                return Err(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, e));
+                client
+                    .write_all(&[0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+                    .await?;
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionRefused,
+                    e,
+                ));
             }
         };
 
@@ -300,42 +310,68 @@ async fn handle_client(
         let mut resp_buf = Vec::new();
         let mut buf = [0u8; 1];
         loop {
-            if st.read_exact(&mut buf).await.is_err() { break; }
+            if st.read_exact(&mut buf).await.is_err() {
+                break;
+            }
             resp_buf.push(buf[0]);
-            if resp_buf.ends_with(b"\r\n\r\n") { break; }
+            if resp_buf.ends_with(b"\r\n\r\n") {
+                break;
+            }
         }
 
         if !resp_buf.starts_with(b"HTTP/1.1 200") && !resp_buf.starts_with(b"HTTP/1.0 200") {
-            let err_msg = format!("HTTP Connect failed: {}", String::from_utf8_lossy(&resp_buf));
-            eprintln!("[Proxy] Error connecting through {}: {}", proxy_addr, err_msg);
-            client.write_all(&[0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
-            return Err(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, err_msg));
+            let err_msg = format!(
+                "HTTP Connect failed: {}",
+                String::from_utf8_lossy(&resp_buf)
+            );
+            eprintln!(
+                "[Proxy] Error connecting through {}: {}",
+                proxy_addr, err_msg
+            );
+            client
+                .write_all(&[0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+                .await?;
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                err_msg,
+            ));
         }
 
-        client.write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
+        client
+            .write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+            .await?;
         tokio::io::copy_bidirectional(client, &mut st).await?;
         Ok(())
     } else {
-        let upstream_stream = if let (Some(u), Some(pass)) = (selected.user.clone(), selected.pass.clone()) {
-            tokio_socks::tcp::Socks5Stream::connect_with_password(
-                proxy_addr.as_str(),
-                target.as_str(),
-                &u,
-                &pass,
-            ).await
-        } else {
-            tokio_socks::tcp::Socks5Stream::connect(proxy_addr.as_str(), target.as_str()).await
-        };
+        let upstream_stream =
+            if let (Some(u), Some(pass)) = (selected.user.clone(), selected.pass.clone()) {
+                tokio_socks::tcp::Socks5Stream::connect_with_password(
+                    proxy_addr.as_str(),
+                    target.as_str(),
+                    &u,
+                    &pass,
+                )
+                .await
+            } else {
+                tokio_socks::tcp::Socks5Stream::connect(proxy_addr.as_str(), target.as_str()).await
+            };
 
         match upstream_stream {
             Ok(mut st) => {
-                client.write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
+                client
+                    .write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+                    .await?;
                 tokio::io::copy_bidirectional(client, &mut st).await?;
                 Ok(())
             }
             Err(e) => {
-                client.write_all(&[0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
-                Err(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, e))
+                client
+                    .write_all(&[0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+                    .await?;
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionRefused,
+                    e,
+                ))
             }
         }
     }
@@ -362,7 +398,8 @@ async fn check_proxy_instance(pool: &ProxyPool, mut p: Proxy) {
             let mut req = format!("CONNECT {} HTTP/1.1\r\nHost: {}\r\n", target, target);
             if let (Some(u), Some(pass)) = (p.user.clone(), p.pass.clone()) {
                 use base64::Engine;
-                let auth = base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", u, pass));
+                let auth =
+                    base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", u, pass));
                 req.push_str(&format!("Proxy-Authorization: Basic {}\r\n", auth));
             }
             req.push_str("\r\n");
@@ -371,9 +408,13 @@ async fn check_proxy_instance(pool: &ProxyPool, mut p: Proxy) {
             let mut resp_buf = Vec::new();
             let mut buf = [0u8; 1];
             loop {
-                if stream.read_exact(&mut buf).await.is_err() { break; }
+                if stream.read_exact(&mut buf).await.is_err() {
+                    break;
+                }
                 resp_buf.push(buf[0]);
-                if resp_buf.ends_with(b"\r\n\r\n") { break; }
+                if resp_buf.ends_with(b"\r\n\r\n") {
+                    break;
+                }
             }
 
             if resp_buf.starts_with(b"HTTP/1.1 200") || resp_buf.starts_with(b"HTTP/1.0 200") {
@@ -384,26 +425,35 @@ async fn check_proxy_instance(pool: &ProxyPool, mut p: Proxy) {
         } else {
             if let (Some(u), Some(pass)) = (p.user.clone(), p.pass.clone()) {
                 tokio_socks::tcp::Socks5Stream::connect_with_password(
-                    proxy_addr.as_str(), "1.1.1.1:443", &u, &pass,
-                ).await.map(|_| ()).map_err(|e| e.into())
+                    proxy_addr.as_str(),
+                    "1.1.1.1:443",
+                    &u,
+                    &pass,
+                )
+                .await
+                .map(|_| ())
+                .map_err(|e| e.into())
             } else {
                 tokio_socks::tcp::Socks5Stream::connect(proxy_addr.as_str(), "1.1.1.1:443")
-                    .await.map(|_| ()).map_err(|e| e.into())
+                    .await
+                    .map(|_| ())
+                    .map_err(|e| e.into())
             }
         }
     };
 
-    let check: Result<(), Box<dyn std::error::Error + Send + Sync>> = match tokio::time::timeout(std::time::Duration::from_secs(5), check_future).await {
-        Ok(res) => res,
-        Err(_) => Err("Health check timed out".into()),
-    };
+    let check: Result<(), Box<dyn std::error::Error + Send + Sync>> =
+        match tokio::time::timeout(std::time::Duration::from_secs(5), check_future).await {
+            Ok(res) => res,
+            Err(_) => Err("Health check timed out".into()),
+        };
 
     let latency = start.elapsed().as_millis() as u64;
     if check.is_ok() {
-        p.is_alive   = true;
+        p.is_alive = true;
         p.latency_ms = Some(latency);
     } else {
-        p.is_alive   = false;
+        p.is_alive = false;
         p.latency_ms = None;
     }
     pool.add(p);

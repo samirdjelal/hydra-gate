@@ -1,10 +1,17 @@
+use crate::engine::ProxyServer;
 use crate::state::{Proxy, ProxyPool, RotationMode};
 use tauri::State;
-use crate::engine::ProxyServer;
 use uuid::Uuid;
 
 #[tauri::command]
-pub fn add_proxy(pool: State<ProxyPool>, protocol: Option<String>, host: String, port: u16, user: Option<String>, pass: Option<String>) -> Result<String, String> {
+pub fn add_proxy(
+    pool: State<ProxyPool>,
+    protocol: Option<String>,
+    host: String,
+    port: u16,
+    user: Option<String>,
+    pass: Option<String>,
+) -> Result<String, String> {
     let id = Uuid::new_v4().to_string();
     let p = Proxy {
         id: id.clone(),
@@ -61,7 +68,10 @@ pub fn set_listen_host(server: State<ProxyServer>, host: String) -> Result<(), S
             server.set_host(host);
             Ok(())
         }
-        _ => Err(format!("Invalid listen host '{}'. Must be '127.0.0.1' or '0.0.0.0'.", host)),
+        _ => Err(format!(
+            "Invalid listen host '{}'. Must be '127.0.0.1' or '0.0.0.0'.",
+            host
+        )),
     }
 }
 
@@ -72,8 +82,8 @@ pub fn get_rotation_mode(server: State<ProxyServer>) -> Result<String, String> {
 
 #[tauri::command]
 pub fn set_rotation_mode(server: State<ProxyServer>, mode: String) -> Result<(), String> {
-    let parsed = RotationMode::from_str(&mode)
-        .ok_or_else(|| format!("Unknown rotation mode: {}", mode))?;
+    let parsed =
+        RotationMode::from_str(&mode).ok_or_else(|| format!("Unknown rotation mode: {}", mode))?;
     server.set_rotation_mode(parsed);
     Ok(())
 }
