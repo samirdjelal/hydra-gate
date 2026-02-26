@@ -35,6 +35,152 @@ Think of it as a **proxy load-balancer** that lives on your desktop.
 
 ---
 
+## 💡 Use Cases
+
+### 🤖 1. Headless Chrome / Playwright / Puppeteer — Bypassing Proxy Auth
+
+The most common pain point HydraGate solves. Chromium-based browsers (Chrome, Puppeteer, Playwright, Selenium with Chrome) **do not support authenticated SOCKS5 proxies natively** — the `--proxy-server` flag accepts a proxy address but has no mechanism to pass credentials. Launching Chrome with an authenticated proxy simply results in a 407 error or a credentials popup that automation can't handle.
+
+**HydraGate strips the auth layer** — your upstream proxies can have usernames and passwords, but your local endpoint is credential-free. Point Chrome at `127.0.0.1:10808` and it just works.
+
+```bash
+# Playwright / Puppeteer
+chromium --proxy-server="socks5://127.0.0.1:10808" https://example.com
+
+# Puppeteer (Node.js)
+const browser = await puppeteer.launch({
+  args: ['--proxy-server=socks5://127.0.0.1:10808']
+});
+```
+
+```python
+# Playwright (Python)
+browser = playwright.chromium.launch(
+    proxy={"server": "socks5://127.0.0.1:10808"}
+)
+
+# Selenium (Python)
+options = webdriver.ChromeOptions()
+options.add_argument('--proxy-server=socks5://127.0.0.1:10808')
+driver = webdriver.Chrome(options=options)
+```
+
+---
+
+### 🌐 2. Web Scraping at Scale — IP Rotation Without Code Changes
+
+When scraping websites, getting blocked by rate limits or IP bans is the #1 problem. HydraGate lets you load a pool of proxies and automatically rotates IPs on every request — **without changing a single line of your scraper code**.
+
+Just point your HTTP client at `127.0.0.1:10808`, and each connection transparently goes through a different upstream IP.
+
+```python
+import requests
+
+proxies = {"https": "socks5://127.0.0.1:10808"}
+
+# Every request may go through a different upstream IP automatically
+for url in urls_to_scrape:
+    response = requests.get(url, proxies=proxies)
+```
+
+> Use **Round Robin** mode for even distribution, or **Least Latency** for maximum scraping speed.
+
+---
+
+### 🔐 3. Apps / Tools That Don't Support Proxy Authentication
+
+Many CLI tools, download managers, and legacy applications support SOCKS5 proxies but only without credentials. Examples include:
+
+- `curl`, `wget`, `aria2c`
+- Some torrent clients
+- Database clients (DBeaver, TablePlus)
+- API testing tools (Insomnia, older versions of Postman)
+- Game launchers and update clients
+
+HydraGate acts as an **auth bridge** — your tools connect to an unauthenticated local proxy, and HydraGate forwards through your password-protected upstream proxies.
+
+```bash
+# curl with no credential headaches
+curl --socks5 127.0.0.1:10808 https://api.example.com
+
+# wget
+wget -e "use_proxy=yes" -e "socks_proxy=socks5://127.0.0.1:10808" https://example.com
+
+# aria2c
+aria2c --all-proxy="socks5://127.0.0.1:10808" https://example.com/file.zip
+```
+
+---
+
+### 🛡️ 4. Privacy & Anonymity — Spread Your Footprint Across Multiple IPs
+
+Instead of routing all your traffic through a single proxy (a single point of failure and a single fingerprint), HydraGate **spreads connections across multiple proxies simultaneously**. Different websites see different IPs, making it much harder to correlate your activity.
+
+> Use **Random** or **Round Robin** mode for maximum IP diversity across sessions.
+
+---
+
+### 📌 5. Session-Sensitive Tasks — Sticky Proxy for Consistent Identity
+
+Some workflows require that **all requests within a session appear to come from the same IP** — e.g., logging into a website, OAuth flows, shopping cart sessions, or any site that ties a session cookie to an IP.
+
+HydraGate's **Time-Based Sticky** mode keeps the same proxy for a 10-minute window, then automatically rotates to the next one. This gives you stable per-session identity without manual management.
+
+> Perfect for: account management bots, social media automation, e-commerce workflows.
+
+---
+
+### ⚡ 6. Load Testing — Avoid IP-Based Rate Limiting
+
+When running load tests with tools like `k6`, `locust`, or `wrk`, all traffic originates from your single machine IP — which servers often detect and throttle. With HydraGate in front of your load tester, **each virtual user's connections spread across your proxy pool**, bypassing per-IP rate limits.
+
+```python
+# locust + SOCKS5
+import socks, socket
+socks.set_default_proxy(socks.SOCKS5, "127.0.0.1", 10808)
+socket.socket = socks.socksocket
+```
+
+---
+
+### 🏢 7. Multi-Account Management — Isolated IP per Account
+
+Managing multiple accounts on platforms that track IPs? Use HydraGate's **Sticky** mode to ensure each account's session always uses the same proxy across a time window, or manage your proxy pool manually to pin specific proxies to specific accounts by controlling which proxies are active.
+
+> Use cases: social media management agencies, e-commerce seller accounts, ad verification.
+
+---
+
+### 🔄 8. Proxy Pool Failover — Automatic Dead Proxy Bypass
+
+If you run a fleet of proxies and some go down unpredictably, HydraGate's **automatic health checker** removes dead proxies from rotation every 30 seconds — **your application never even sees a failed connection due to a dead proxy**. No manual monitoring required.
+
+> Ideal for: long-running bots, overnight scrape jobs, CI/CD pipelines that run browser tests.
+
+---
+
+### 🌍 9. Geo-Targeting — Route Traffic Through Specific Regions
+
+If you have proxies in different countries, you can manage geographic routing by keeping only the relevant regional proxies active in your pool. Combined with **Least Latency** mode, HydraGate always routes through your fastest available geo-targeted proxy.
+
+> Use cases: ad verification (checking how ads appear in different countries), geo-restricted content access, international price monitoring.
+
+---
+
+### 📊 Use Case → Recommended Rotation Mode
+
+| Use Case | Best Mode |
+|----------|-----------|
+| Web scraping (max coverage) | 🔀 Round Robin |
+| Web scraping (max speed) | ⚡ Least Latency |
+| Session-based automation | 📌 Sticky |
+| Privacy / fingerprint diversity | 🎲 Random |
+| Load testing | ⚖️ Weighted |
+| Headless browser automation | Any |
+| Proxy failover / resilience | Any (auto-excludes dead proxies) |
+
+---
+
 ## ✨ Features
 
 ### 🌐 Proxy Management
