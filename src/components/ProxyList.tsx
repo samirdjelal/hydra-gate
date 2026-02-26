@@ -1,10 +1,13 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Proxy } from "../types";
-import { Activity, ServerOff, Shield, ShieldOff } from "lucide-react";
+import { Activity, ServerOff, Shield, ShieldOff, Edit } from "lucide-react";
 
 interface ProxyListProps {
     proxies: Proxy[];
     onLongPress: (proxy: Proxy) => void;
+    onEdit: (proxy: Proxy) => void;
+    onCheckHealth: (proxy: Proxy) => void;
+    onDelete: (proxy: Proxy) => void;
 }
 
 function LatencyBadge({ ms }: { ms?: number | null }) {
@@ -23,8 +26,18 @@ function LatencyBadge({ ms }: { ms?: number | null }) {
     );
 }
 
-export function ProxyList({ proxies, onLongPress }: ProxyListProps) {
+import { createPortal } from "react-dom";
+
+export function ProxyList({ proxies, onLongPress, onEdit, onCheckHealth, onDelete }: ProxyListProps) {
     const timerRef = useRef<number | null>(null);
+    const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; proxy: Proxy } | null>(null);
+
+    // Close right click menu on outside click
+    useEffect(() => {
+        const handleClick = () => setContextMenu(null);
+        window.addEventListener("click", handleClick);
+        return () => window.removeEventListener("click", handleClick);
+    }, []);
 
     const startPress = (p: Proxy) => {
         if (timerRef.current) return;
@@ -73,6 +86,10 @@ export function ProxyList({ proxies, onLongPress }: ProxyListProps) {
                     onTouchStart={() => startPress(p)}
                     onTouchEnd={cancelPress}
                     onTouchMove={cancelPress}
+                    onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenu({ mouseX: e.clientX, mouseY: e.clientY, proxy: p });
+                    }}
                 >
                     {/* Status indicator */}
                     <div className="flex items-center gap-4">
@@ -87,10 +104,15 @@ export function ProxyList({ proxies, onLongPress }: ProxyListProps) {
 
                         {/* Host info */}
                         <div className="flex flex-col gap-0.5">
-                            <span className="font-mono text-sm font-medium text-white">
-                                {p.host}
-                                <span className="text-gray-500">:</span>
-                                <span className="text-hydra-accent">{p.port}</span>
+                            <span className="font-mono text-sm font-medium text-white flex items-center gap-2">
+                                <span>
+                                    {p.host}
+                                    <span className="text-gray-500">:</span>
+                                    <span className="text-hydra-accent">{p.port}</span>
+                                </span>
+                                <span className="uppercase text-[10px] font-bold px-1.5 py-0.5 rounded bg-hydra-surface border border-hydra-border text-gray-400">
+                                    {p.protocol}
+                                </span>
                             </span>
                             <div className="flex items-center gap-2 text-xs text-gray-600">
                                 {p.user ? (
@@ -113,6 +135,40 @@ export function ProxyList({ proxies, onLongPress }: ProxyListProps) {
                     </div>
                 </div>
             ))}
+
+            {contextMenu && createPortal(
+                <div
+                    className="fixed z-50 min-w-[160px] bg-hydra-card border border-hydra-border rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] overflow-hidden animate-scale-in"
+                    style={{ top: contextMenu.mouseY, left: contextMenu.mouseX }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex flex-col py-1">
+                        <button
+                            className="flex items-center px-4 py-2.5 text-sm text-gray-300 hover:bg-hydra-card-hover hover:text-white transition-colors text-left"
+                            onClick={() => { onCheckHealth(contextMenu.proxy); setContextMenu(null); }}
+                        >
+                            <Activity className="w-4 h-4 mr-2.5 text-hydra-accent" />
+                            Check Health
+                        </button>
+                        <button
+                            className="flex items-center px-4 py-2.5 text-sm text-gray-300 hover:bg-hydra-card-hover hover:text-white transition-colors text-left"
+                            onClick={() => { onEdit(contextMenu.proxy); setContextMenu(null); }}
+                        >
+                            <Edit className="w-4 h-4 mr-2.5 text-gray-400" />
+                            Edit Proxy
+                        </button>
+                        <div className="h-px bg-hydra-border my-1 mx-2" />
+                        <button
+                            className="flex items-center px-4 py-2.5 text-sm text-hydra-danger hover:bg-red-500/10 transition-colors text-left"
+                            onClick={() => { onDelete(contextMenu.proxy); setContextMenu(null); }}
+                        >
+                            <ServerOff className="w-4 h-4 mr-2.5" />
+                            Delete
+                        </button>
+                    </div>
+                </div>,
+                document.body
+            )}
         </div>
     );
 }

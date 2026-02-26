@@ -267,7 +267,8 @@ async fn handle_client(
 
     // Select upstream proxy using current rotation strategy
     let proxies = pool.get_all();
-    let alive_proxies: Vec<Proxy> = proxies.into_iter().filter(|p| p.is_alive).collect();
+    let mut alive_proxies: Vec<Proxy> = proxies.into_iter().filter(|p| p.is_alive).collect();
+    alive_proxies.sort_by(|a, b| a.id.cmp(&b.id));
 
     let selected = select_proxy(&alive_proxies, &mode, &rr_idx, &target_addr)
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No alive proxies"))?;
@@ -275,58 +276,150 @@ async fn handle_client(
     let proxy_addr = format!("{}:{}", selected.host, selected.port);
     let target     = format!("{}:{}", target_addr, target_port);
 
-    let upstream_stream = if let (Some(u), Some(pass)) = (selected.user.clone(), selected.pass.clone()) {
-        tokio_socks::tcp::Socks5Stream::connect_with_password(
-            proxy_addr.as_str(),
-            target.as_str(),
-            &u,
-            &pass,
-        ).await
-    } else {
-        tokio_socks::tcp::Socks5Stream::connect(proxy_addr.as_str(), target.as_str()).await
-    };
+    println!("[Proxy] Selected {} ({}) for target {}", selected.id, proxy_addr, target);
 
-    match upstream_stream {
-        Ok(mut st) => {
-            client.write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
-            tokio::io::copy_bidirectional(client, &mut st).await?;
-            Ok(())
+    if selected.protocol == "http" || selected.protocol == "https" {
+        let mut st = match tokio::net::TcpStream::connect(&proxy_addr).await {
+            Ok(s) => s,
+            Err(e) => {
+                client.write_all(&[0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
+                return Err(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, e));
+            }
+        };
+
+        let mut req = format!("CONNECT {} HTTP/1.1\r\nHost: {}\r\n", target, target);
+        if let (Some(u), Some(pass)) = (selected.user.clone(), selected.pass.clone()) {
+            use base64::Engine;
+            let auth = base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", u, pass));
+            req.push_str(&format!("Proxy-Authorization: Basic {}\r\n", auth));
         }
-        Err(e) => {
+        req.push_str("\r\n");
+        st.write_all(req.as_bytes()).await?;
+
+        // Read response until \r\n\r\n
+        let mut resp_buf = Vec::new();
+        let mut buf = [0u8; 1];
+        loop {
+            if st.read_exact(&mut buf).await.is_err() { break; }
+            resp_buf.push(buf[0]);
+            if resp_buf.ends_with(b"\r\n\r\n") { break; }
+        }
+
+        if !resp_buf.starts_with(b"HTTP/1.1 200") && !resp_buf.starts_with(b"HTTP/1.0 200") {
+            let err_msg = format!("HTTP Connect failed: {}", String::from_utf8_lossy(&resp_buf));
+            eprintln!("[Proxy] Error connecting through {}: {}", proxy_addr, err_msg);
             client.write_all(&[0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
-            Err(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, e))
+            return Err(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, err_msg));
+        }
+
+        client.write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
+        tokio::io::copy_bidirectional(client, &mut st).await?;
+        Ok(())
+    } else {
+        let upstream_stream = if let (Some(u), Some(pass)) = (selected.user.clone(), selected.pass.clone()) {
+            tokio_socks::tcp::Socks5Stream::connect_with_password(
+                proxy_addr.as_str(),
+                target.as_str(),
+                &u,
+                &pass,
+            ).await
+        } else {
+            tokio_socks::tcp::Socks5Stream::connect(proxy_addr.as_str(), target.as_str()).await
+        };
+
+        match upstream_stream {
+            Ok(mut st) => {
+                client.write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
+                tokio::io::copy_bidirectional(client, &mut st).await?;
+                Ok(())
+            }
+            Err(e) => {
+                client.write_all(&[0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
+                Err(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, e))
+            }
         }
     }
 }
 
 // ─── Health checker ─────────────────────────────────────────────────────────
 
+pub async fn check_single_proxy(pool: &ProxyPool, id: &str) {
+    let p = match pool.proxies.get(id).map(|r| r.value().clone()) {
+        Some(p) => p,
+        None => return,
+    };
+    check_proxy_instance(pool, p).await;
+}
+
+async fn check_proxy_instance(pool: &ProxyPool, mut p: Proxy) {
+    let proxy_addr = format!("{}:{}", p.host, p.port);
+    let start = std::time::Instant::now();
+
+    let check_future = async {
+        if p.protocol == "http" || p.protocol == "https" {
+            let mut stream = tokio::net::TcpStream::connect(&proxy_addr).await?;
+            let target = "1.1.1.1:443";
+            let mut req = format!("CONNECT {} HTTP/1.1\r\nHost: {}\r\n", target, target);
+            if let (Some(u), Some(pass)) = (p.user.clone(), p.pass.clone()) {
+                use base64::Engine;
+                let auth = base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", u, pass));
+                req.push_str(&format!("Proxy-Authorization: Basic {}\r\n", auth));
+            }
+            req.push_str("\r\n");
+            stream.write_all(req.as_bytes()).await?;
+
+            let mut resp_buf = Vec::new();
+            let mut buf = [0u8; 1];
+            loop {
+                if stream.read_exact(&mut buf).await.is_err() { break; }
+                resp_buf.push(buf[0]);
+                if resp_buf.ends_with(b"\r\n\r\n") { break; }
+            }
+
+            if resp_buf.starts_with(b"HTTP/1.1 200") || resp_buf.starts_with(b"HTTP/1.0 200") {
+                Ok(())
+            } else {
+                Err("HTTP Connect failed".into())
+            }
+        } else {
+            if let (Some(u), Some(pass)) = (p.user.clone(), p.pass.clone()) {
+                tokio_socks::tcp::Socks5Stream::connect_with_password(
+                    proxy_addr.as_str(), "1.1.1.1:443", &u, &pass,
+                ).await.map(|_| ()).map_err(|e| e.into())
+            } else {
+                tokio_socks::tcp::Socks5Stream::connect(proxy_addr.as_str(), "1.1.1.1:443")
+                    .await.map(|_| ()).map_err(|e| e.into())
+            }
+        }
+    };
+
+    let check: Result<(), Box<dyn std::error::Error + Send + Sync>> = match tokio::time::timeout(std::time::Duration::from_secs(5), check_future).await {
+        Ok(res) => res,
+        Err(_) => Err("Health check timed out".into()),
+    };
+
+    let latency = start.elapsed().as_millis() as u64;
+    if check.is_ok() {
+        p.is_alive   = true;
+        p.latency_ms = Some(latency);
+    } else {
+        p.is_alive   = false;
+        p.latency_ms = None;
+    }
+    pool.add(p);
+}
+
+pub async fn check_all_proxies(pool: &ProxyPool) {
+    let proxies = pool.get_all();
+    for p in proxies {
+        check_proxy_instance(pool, p).await;
+    }
+}
+
 pub fn start_health_checker(pool: ProxyPool) {
     tauri::async_runtime::spawn(async move {
         loop {
-            let proxies = pool.get_all();
-            for mut p in proxies {
-                let proxy_addr = format!("{}:{}", p.host, p.port);
-                let start = std::time::Instant::now();
-
-                let check = if let (Some(u), Some(pass)) = (p.user.clone(), p.pass.clone()) {
-                    tokio_socks::tcp::Socks5Stream::connect_with_password(
-                        proxy_addr.as_str(), "1.1.1.1:53", &u, &pass,
-                    ).await
-                } else {
-                    tokio_socks::tcp::Socks5Stream::connect(proxy_addr.as_str(), "1.1.1.1:53").await
-                };
-
-                let latency = start.elapsed().as_millis() as u64;
-                if check.is_ok() {
-                    p.is_alive   = true;
-                    p.latency_ms = Some(latency);
-                } else {
-                    p.is_alive   = false;
-                    p.latency_ms = None;
-                }
-                pool.add(p);
-            }
+            check_all_proxies(&pool).await;
             tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
         }
     });

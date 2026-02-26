@@ -5,6 +5,7 @@ use dashmap::DashMap;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Proxy {
     pub id: String,
+    pub protocol: String,
     pub host: String,
     pub port: u16,
     pub user: Option<String>,

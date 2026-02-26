@@ -34,6 +34,11 @@ pub fn run() {
             commands::get_rotation_mode,
             commands::set_rotation_mode,
             commands::remove_proxy,
+            commands::clear_proxies,
+            commands::clear_dead_proxies,
+            commands::update_proxy,
+            commands::refresh_health,
+            commands::refresh_proxy_health,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

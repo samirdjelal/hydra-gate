@@ -3,9 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { ProxyList } from "./components/ProxyList";
 import { AddProxyModal } from "./components/AddProxyModal";
 import { DeleteProxyModal } from "./components/DeleteProxyModal";
+import { EditProxyModal } from "./components/EditProxyModal";
 import { SettingsPage } from "./components/SettingsPage";
 import { Proxy } from "./types";
-import { Plus, Power, Layers, Settings } from "lucide-react";
+import { Plus, Power, Layers, Settings, Activity, Trash2, Sparkles } from "lucide-react";
 
 type Page = "proxies" | "settings";
 
@@ -14,6 +15,7 @@ function App() {
   const [isServerActive, setIsServerActive] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [proxyToDelete, setProxyToDelete] = useState<Proxy | null>(null);
+  const [proxyToEdit, setProxyToEdit] = useState<Proxy | null>(null);
   const [page, setPage] = useState<Page>("proxies");
   const [listenPort, setListenPort] = useState<number>(10808);
   const [listenHost, setListenHost] = useState<string>("127.0.0.1");
@@ -71,24 +73,89 @@ function App() {
     }
   };
 
-  const handleAddProxy = async (proxyString: string) => {
+  const handleRefreshHealth = async () => {
+    try {
+      await invoke("refresh_health");
+      await fetchProxies();
+    } catch (e) {
+      console.error("Failed to refresh health:", e);
+    }
+  };
+
+  const handleCheckSingleHealth = async (proxy: Proxy) => {
+    try {
+      await invoke("refresh_proxy_health", { id: proxy.id });
+      await fetchProxies();
+    } catch (e) {
+      console.error("Failed to check single proxy health:", e);
+    }
+  };
+
+  const handleEditProxy = async (id: string, proxyString: string) => {
+    let currentLine = proxyString.trim();
+    if (!currentLine) return;
+
+    let protocol: string | null = null;
+    if (currentLine.includes('://')) {
+      const parts = currentLine.split('://');
+      protocol = parts[0];
+      currentLine = parts[1];
+    }
+
+    const parts = currentLine.split(':');
+    if (parts.length >= 2) {
+      const host = parts[0];
+      const port = parseInt(parts[1], 10);
+      const user = parts[2] || null;
+      const pass = parts[3] || null;
+      try {
+        await invoke("update_proxy", { id, protocol, host, port, user, pass });
+        await fetchProxies();
+      } catch (e) {
+        console.error("Failed to update proxy:", e);
+      }
+    }
+    setProxyToEdit(null);
+  };
+
+  const handleAddProxy = async (proxyString: string, defaultProtocol: string) => {
     const lines = proxyString.split('\n');
+    const newProxyIds: string[] = [];
+
     for (const line of lines) {
-      const parts = line.trim().split(':');
+      let currentLine = line.trim();
+      if (!currentLine) continue;
+
+      let protocol: string | null = null;
+      if (currentLine.includes('://')) {
+        const parts = currentLine.split('://');
+        protocol = parts[0];
+        currentLine = parts[1];
+      } else {
+        protocol = defaultProtocol;
+      }
+
+      const parts = currentLine.split(':');
       if (parts.length >= 2) {
         const host = parts[0];
         const port = parseInt(parts[1], 10);
         const user = parts[2] || null;
         const pass = parts[3] || null;
         try {
-          await invoke("add_proxy", { host, port, user, pass });
+          const id = await invoke<string>("add_proxy", { protocol, host, port, user, pass });
+          newProxyIds.push(id);
         } catch (e) {
           console.error("Failed to add proxy:", e);
         }
       }
     }
-    await fetchProxies();
     setShowAddModal(false);
+
+    // Check health only for newly added proxies
+    await Promise.all(
+      newProxyIds.map(id => invoke("refresh_proxy_health", { id }).catch(console.error))
+    );
+    await fetchProxies();
   };
 
   const handleDeleteProxy = async (id: string) => {
@@ -99,6 +166,31 @@ function App() {
       console.error("Failed to remove proxy:", e);
     }
     setProxyToDelete(null);
+  };
+
+  const handleClearProxies = async () => {
+    if (proxies.length === 0) return;
+    if (window.confirm("Are you sure you want to delete all proxies?")) {
+      try {
+        await invoke("clear_proxies");
+        await fetchProxies();
+      } catch (e) {
+        console.error("Failed to clear proxies:", e);
+      }
+    }
+  };
+
+  const handleClearDeadProxies = async () => {
+    const deadCount = proxies.filter(p => !p.is_alive).length;
+    if (deadCount === 0) return;
+    if (window.confirm(`Are you sure you want to delete ${deadCount} offline proxies?`)) {
+      try {
+        await invoke("clear_dead_proxies");
+        await fetchProxies();
+      } catch (e) {
+        console.error("Failed to clear dead proxies:", e);
+      }
+    }
   };
 
   const aliveCount = proxies.filter(p => p.is_alive).length;
@@ -212,20 +304,65 @@ function App() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="
-                  flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
-                  bg-hydra-accent hover:bg-blue-500 text-white
-                  transition-all duration-200 shadow-[0_0_16px_rgba(59,130,246,0.3)]
-                  hover:shadow-[0_0_24px_rgba(59,130,246,0.45)] active:scale-95
-                "
-              >
-                <Plus className="w-4 h-4" />
-                Add Proxy
-              </button>
+              <div className="flex items-center gap-2">
+                {proxies.length > 0 && (
+                  <>
+                    <button
+                      onClick={handleClearDeadProxies}
+                      title="Clear Offline Proxies"
+                      className="
+                        p-2.5 rounded-xl text-gray-400 bg-hydra-card border border-hydra-border
+                        hover:text-hydra-accent hover:border-hydra-accent/50 hover:bg-hydra-accent/10
+                        transition-all duration-200 active:scale-95
+                      "
+                    >
+                      <Sparkles className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={handleClearProxies}
+                      title="Clear All Proxies"
+                      className="
+                        p-2.5 rounded-xl text-gray-400 bg-hydra-card border border-hydra-border
+                        hover:text-hydra-danger hover:border-red-500/50 hover:bg-red-500/10
+                        transition-all duration-200 active:scale-95
+                      "
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={handleRefreshHealth}
+                  title="Refresh Proxies Health"
+                  className="
+                    p-2.5 rounded-xl text-gray-400 bg-hydra-card border border-hydra-border
+                    hover:text-white hover:border-gray-600 hover:bg-hydra-card-hover
+                    transition-all duration-200 active:scale-95
+                  "
+                >
+                  <Activity className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="
+                    flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
+                    bg-hydra-accent hover:bg-blue-500 text-white
+                    transition-all duration-200 shadow-[0_0_16px_rgba(59,130,246,0.3)]
+                    hover:shadow-[0_0_24px_rgba(59,130,246,0.45)] active:scale-95
+                  "
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Proxy
+                </button>
+              </div>
             </div>
-            <ProxyList proxies={proxies} onLongPress={(proxy) => setProxyToDelete(proxy)} />
+            <ProxyList
+              proxies={proxies}
+              onLongPress={(proxy) => setProxyToDelete(proxy)}
+              onEdit={(proxy) => setProxyToEdit(proxy)}
+              onCheckHealth={handleCheckSingleHealth}
+              onDelete={(proxy) => setProxyToDelete(proxy)}
+            />
           </section>
         ) : (
           <SettingsPage isServerActive={isServerActive} />
@@ -244,6 +381,14 @@ function App() {
           proxy={proxyToDelete}
           onClose={() => setProxyToDelete(null)}
           onConfirm={handleDeleteProxy}
+        />
+      )}
+
+      {proxyToEdit && (
+        <EditProxyModal
+          proxy={proxyToEdit}
+          onClose={() => setProxyToEdit(null)}
+          onEdit={(str: string) => handleEditProxy(proxyToEdit.id, str)}
         />
       )}
     </div>

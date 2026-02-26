@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Rust-Powered-F46623?logo=rust&logoColor=white" />
   <img src="https://img.shields.io/badge/React-Frontend-61DAFB?logo=react&logoColor=black" />
   <img src="https://img.shields.io/badge/Protocol-SOCKS5-7C3AED" />
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-0EA5E9" />
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-0EA5E9" />
 </p>
 
 ---
@@ -23,15 +23,13 @@
 
 | 🏠 Home — Proxy Dashboard | ⚙️ Settings — Rotation & Port |
 |:---:|:---:|
-| ![Homepage](images/1.jpg) | ![Settings Page](images/2.jpg) |
+| ![Homepage](images/1.png) | ![Settings Page](images/2.png) |
 
 ---
 
-## 🚀 What is HydraGate?
+**HydraGate** exposes a single local `SOCKS5` endpoint (`127.0.0.1:10808` by default) and intelligently routes every connection through a pool of upstream **SOCKS5 or HTTP/HTTPS** proxies. Add as many proxies as you like — HydraGate handles health checking, rotation, and failover automatically.
 
-**HydraGate** exposes a single local `SOCKS5` endpoint (`127.0.0.1:10808` by default) and intelligently routes every connection through a pool of upstream SOCKS5 proxies. Add as many proxies as you like — HydraGate handles health checking, rotation, and failover automatically.
-
-Think of it as a **proxy load-balancer** that lives on your desktop.
+Think of it as a **proxy load-balancer** for your desktop and mobile devices.
 
 ---
 
@@ -184,8 +182,9 @@ If you have proxies in different countries, you can manage geographic routing by
 ## ✨ Features
 
 ### 🌐 Proxy Management
-- **Add multiple upstream SOCKS5 proxies** — host, port, and optional username/password
-- **Bulk import** — paste multiple proxies at once (`host:port:user:pass` format, one per line)
+- **Add multiple upstream proxies** — Supports **SOCKS5** and **HTTP/HTTPS (CONNECT)**
+- **Protocol prefixing** — Defaults to `socks5://` but supports `http://` and `https://`
+- **Bulk import** — paste multiple proxies at once (`[protocol://]host:port[:user:pass]` format, one per line)
 - **Live health status** — each proxy is shown as 🟢 Online or 🔴 Offline
 - **Latency display** — real-time measured latency (ms) shown per proxy
 - **Remove proxies** individually at any time
@@ -196,7 +195,7 @@ If you have proxies in different countries, you can manage geographic routing by
 - Measures **round-trip latency** for every proxy on each check cycle
 - Dead proxies are automatically excluded from routing
 
-### ⚡ 5 Proxy Rotation Strategies
+### ⚡ 6 Proxy Rotation Strategies
 Switch between rotation modes at any time — changes apply **immediately** to new connections:
 
 | Mode | Description |
@@ -219,6 +218,15 @@ Switch between rotation modes at any time — changes apply **immediately** to n
 - **Online** (alive) proxies counter
 - **Offline** (dead) proxies counter
 - Auto-refreshes every **5 seconds**
+
+### 📱 Android Support
+
+HydraGate is now available for Android! Take your proxy pool on the go.
+
+- **Native Integration**: Built using Tauri's mobile capabilities.
+- **Local SOCKS5 Server**: Runs a background service on your device, allowing other apps to route traffic through HydraGate.
+- **Battery Optimized**: Efficient Rust backend ensures minimal battery drain during background proxying.
+- **Unified Experience**: The same clean UI and rotation strategies as the desktop version.
 
 ---
 
@@ -243,6 +251,7 @@ You can paste **multiple proxies at once** — one per line. HydraGate imports t
 **Example:**
 ```
 192.168.1.100:1080
+http://proxy.example.com:8080:user:pass
 proxy.example.com:1080:myuser:mypassword
 10.0.0.5:3128:admin:secret
 ```
@@ -339,12 +348,13 @@ host:port:username:password
 
 | Layer | Technology |
 |-------|-----------|
-| Desktop framework | [Tauri v2](https://tauri.app) |
+| Desktop/Mobile framework | [Tauri v2](https://tauri.app) |
 | Backend | Rust + Tokio (async runtime) |
-| SOCKS5 client | [`tokio-socks`](https://crates.io/crates/tokio-socks) |
+| Proxy clients | [`tokio-socks`](https://crates.io/crates/tokio-socks) + Native HTTP CONNECT |
 | Frontend | React + TypeScript |
 | UI components | [Lucide React](https://lucide.dev) |
 | Build tool | Vite |
+| Mobile Bridge | JNI (Android) |
 
 ---
 
