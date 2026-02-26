@@ -48,6 +48,22 @@ pub fn set_listen_port(server: State<ProxyServer>, port: u16) -> Result<(), Stri
 }
 
 #[tauri::command]
+pub fn get_listen_host(server: State<ProxyServer>) -> Result<String, String> {
+    Ok(server.get_host())
+}
+
+#[tauri::command]
+pub fn set_listen_host(server: State<ProxyServer>, host: String) -> Result<(), String> {
+    match host.as_str() {
+        "127.0.0.1" | "0.0.0.0" => {
+            server.set_host(host);
+            Ok(())
+        }
+        _ => Err(format!("Invalid listen host '{}'. Must be '127.0.0.1' or '0.0.0.0'.", host)),
+    }
+}
+
+#[tauri::command]
 pub fn get_rotation_mode(server: State<ProxyServer>) -> Result<String, String> {
     Ok(server.get_rotation_mode())
 }
@@ -57,5 +73,11 @@ pub fn set_rotation_mode(server: State<ProxyServer>, mode: String) -> Result<(),
     let parsed = RotationMode::from_str(&mode)
         .ok_or_else(|| format!("Unknown rotation mode: {}", mode))?;
     server.set_rotation_mode(parsed);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn remove_proxy(pool: State<ProxyPool>, id: String) -> Result<(), String> {
+    pool.proxies.remove(&id);
     Ok(())
 }

@@ -14,6 +14,7 @@ function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [page, setPage] = useState<Page>("proxies");
   const [listenPort, setListenPort] = useState<number>(10808);
+  const [listenHost, setListenHost] = useState<string>("127.0.0.1");
 
   const fetchProxies = async () => {
     try {
@@ -33,16 +34,29 @@ function App() {
     }
   };
 
+  const fetchHost = async () => {
+    try {
+      const host: string = await invoke("get_listen_host");
+      setListenHost(host);
+    } catch (e) {
+      console.error("Failed to fetch host:", e);
+    }
+  };
+
   useEffect(() => {
     fetchProxies();
     fetchPort();
+    fetchHost();
     const interval = setInterval(fetchProxies, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // Re-sync port whenever the user navigates back from settings
+  // Re-sync port + host whenever the user navigates back from settings
   useEffect(() => {
-    if (page === "proxies") fetchPort();
+    if (page === "proxies") {
+      fetchPort();
+      fetchHost();
+    }
   }, [page]);
 
   const toggleServer = async () => {
@@ -103,7 +117,7 @@ function App() {
                 Hydra<span className="text-hydra-accent">Gate</span>
               </h1>
               <p className="text-xs text-gray-500 font-mono">
-                127.0.0.1:<span className="text-hydra-accent/80">{listenPort}</span>
+                {listenHost}:<span className="text-hydra-accent/80">{listenPort}</span>
               </p>
             </div>
           </div>

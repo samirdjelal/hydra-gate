@@ -205,7 +205,8 @@ Switch between rotation modes at any time — changes apply **immediately** to n
 | 🎲 **Random** | Picks a random alive proxy on every new connection. Simple and unpredictable. |
 | ⚡ **Least Latency** | Always routes through the proxy with the lowest measured latency. Best for speed. |
 | ⚖️ **Weighted** | Probabilistic selection — lower latency = higher chance of being chosen. Balances speed and distribution. |
-| 📌 **Time-Based Sticky** | All connections within a 10-minute window use the same proxy. Auto-rotates when the window expires — great for session stability. |
+| ⏱️ **Time-Based Sticky** | All connections within a 10-minute window use the same proxy. Auto-rotates when the window expires — great for session stability. |
+| 🎯 **IP-Based Sticky** | Hashes the target hostname — the same destination always routes through the same proxy, regardless of time. Ideal for per-site identity consistency. |
 
 ### 🎛️ Server Control
 - **One-click Start / Stop** of the local SOCKS5 listener
@@ -283,15 +284,27 @@ Navigate to the **Settings** tab (⚙️) and select your preferred rotation mod
 
 ## ⚙️ Settings
 
+### Listen Interface
+Choose which network interface the SOCKS5 server binds to:
+
+| Option | Bind Address | Access |
+|--------|-------------|--------|
+| 🔒 **Loopback** (default) | `127.0.0.1` | Only from this machine |
+| 🌐 **All Interfaces** | `0.0.0.0` | From any device on the local network |
+
+> ⚠️ **Warning:** Using `0.0.0.0` exposes HydraGate to all devices on your network. Only use this in trusted environments.
+
+Changes take effect on next server start. The current bind address is always shown in the header.
+
 ### Listen Port
 Configure which local port HydraGate binds to. Default is `10808`.
 
 - Must be between `1024` and `65535`
 - If the server is running, **stop and restart** it to apply the new port
-- The current port is always shown in the header (`127.0.0.1:PORT`)
+- The current address is always shown in the header (`HOST:PORT`)
 
 ### Proxy Rotation Mode
-See the [5 Proxy Rotation Strategies](#-5-proxy-rotation-strategies) section above. All modes operate exclusively over **alive proxies** — dead ones are always excluded.
+See the [6 Proxy Rotation Strategies](#-6-proxy-rotation-strategies) section above. All modes operate exclusively over **alive proxies** — dead ones are always excluded.
 
 ---
 

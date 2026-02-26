@@ -8,6 +8,7 @@ pub struct ProxyServer {
     pool: ProxyPool,
     is_running: Arc<AtomicBool>,
     pub listen_port: Arc<AtomicU16>,
+    pub listen_host: Arc<Mutex<String>>,
     pub rotation_mode: Arc<Mutex<RotationMode>>,
     round_robin_idx: Arc<AtomicUsize>,
 }
@@ -18,6 +19,7 @@ impl ProxyServer {
             pool,
             is_running: Arc::new(AtomicBool::new(false)),
             listen_port: Arc::new(AtomicU16::new(default_port)),
+            listen_host: Arc::new(Mutex::new("127.0.0.1".to_string())),
             rotation_mode: Arc::new(Mutex::new(RotationMode::RoundRobin)),
             round_robin_idx: Arc::new(AtomicUsize::new(0)),
         }
@@ -29,6 +31,14 @@ impl ProxyServer {
 
     pub fn set_port(&self, port: u16) {
         self.listen_port.store(port, Ordering::SeqCst);
+    }
+
+    pub fn get_host(&self) -> String {
+        self.listen_host.lock().unwrap().clone()
+    }
+
+    pub fn set_host(&self, host: String) {
+        *self.listen_host.lock().unwrap() = host;
     }
 
     pub fn is_running(&self) -> bool {
@@ -55,11 +65,12 @@ impl ProxyServer {
         let pool          = self.pool.clone();
         let running       = self.is_running.clone();
         let port          = self.listen_port.load(Ordering::SeqCst);
+        let host          = self.listen_host.lock().unwrap().clone();
         let rotation_mode = self.rotation_mode.clone();
         let rr_idx        = self.round_robin_idx.clone();
 
         tauri::async_runtime::spawn(async move {
-            let addr = format!("127.0.0.1:{}", port);
+            let addr = format!("{}:{}", host, port);
             let listener = match TcpListener::bind(&addr).await {
                 Ok(l) => l,
                 Err(e) => {
@@ -98,6 +109,15 @@ impl ProxyServer {
 
 // ─── Proxy selection ────────────────────────────────────────────────────────
 
+/// Simple djb2 hash for stable, dependency-free string hashing.
+fn djb2_hash(s: &str) -> usize {
+    let mut hash: usize = 5381;
+    for b in s.bytes() {
+        hash = hash.wrapping_mul(33).wrapping_add(b as usize);
+    }
+    hash
+}
+
 fn select_proxy<'a>(
     alive: &'a [Proxy],
     mode: &RotationMode,
@@ -131,8 +151,6 @@ fn select_proxy<'a>(
 
         // ── Weighted (inversely proportional to latency) ─────────────────
         RotationMode::Weighted => {
-            // Weight = 1 / latency_ms. Use integer arithmetic: weight = MAX_MS - latency.
-            // Proxies with no latency measurement get a mid-range weight.
             const MAX_MS: u64 = 10_000;
             const DEFAULT_WEIGHT: u64 = MAX_MS / 2;
 
@@ -145,7 +163,6 @@ fn select_proxy<'a>(
                 return Some(&alive[0]);
             }
 
-            // Random pick in [0, total)
             let nanos = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -164,7 +181,7 @@ fn select_proxy<'a>(
         // ── Time-Based Sticky (10-minute window) ─────────────────────────
         // All connections within the same time window go through the same
         // proxy. After the window expires the next proxy in the list is used.
-        RotationMode::Sticky => {
+        RotationMode::TimeSticky => {
             const WINDOW_SECS: u64 = 600; // 10-minute window
             let slot = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -172,6 +189,14 @@ fn select_proxy<'a>(
                 .as_secs()
                 / WINDOW_SECS;
             Some(&alive[(slot as usize) % alive.len()])
+        }
+
+        // ── IP-Based Sticky (hash target hostname) ────────────────────────
+        // The same destination host always routes through the same proxy,
+        // regardless of time. Different destinations may use different proxies.
+        RotationMode::IpSticky => {
+            let idx = djb2_hash(target_host) % alive.len();
+            Some(&alive[idx])
         }
     }
 }

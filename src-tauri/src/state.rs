@@ -47,8 +47,12 @@ pub enum RotationMode {
     LeastLatency,
     /// Weighted-random: probability inversely proportional to latency.
     Weighted,
-    /// Hash the **target hostname** — same destination always uses same proxy.
-    Sticky,
+    /// Time-Based Sticky: all connections within the same 10-minute window
+    /// go through the same proxy. Rotates when the window expires.
+    TimeSticky,
+    /// IP-Based Sticky: hash the target hostname so the same destination
+    /// always goes through the same proxy, regardless of time.
+    IpSticky,
 }
 
 impl RotationMode {
@@ -58,7 +62,8 @@ impl RotationMode {
             RotationMode::Random       => "random",
             RotationMode::LeastLatency => "least_latency",
             RotationMode::Weighted     => "weighted",
-            RotationMode::Sticky       => "sticky",
+            RotationMode::TimeSticky   => "time_sticky",
+            RotationMode::IpSticky     => "ip_sticky",
         }
     }
 
@@ -68,7 +73,10 @@ impl RotationMode {
             "random"        => Some(RotationMode::Random),
             "least_latency" => Some(RotationMode::LeastLatency),
             "weighted"      => Some(RotationMode::Weighted),
-            "sticky"        => Some(RotationMode::Sticky),
+            "time_sticky"   => Some(RotationMode::TimeSticky),
+            "ip_sticky"     => Some(RotationMode::IpSticky),
+            // legacy alias kept for backward-compat
+            "sticky"        => Some(RotationMode::TimeSticky),
             _ => None,
         }
     }
