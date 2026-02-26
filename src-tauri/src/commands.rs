@@ -91,3 +91,8 @@ pub fn start_vpn() -> Result<(), String> {
 pub fn stop_vpn() -> Result<(), String> {
     crate::android::stop_vpn()
 }
+
+#[tauri::command]
+pub fn get_vpn_status() -> Result<bool, String> {
+    crate::android::get_vpn_status()
+}

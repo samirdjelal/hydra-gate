@@ -10,6 +10,7 @@ class HydraVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
 
     companion object {
+        var isRunning = false
         init {
             System.loadLibrary("hydragate_lib")
         }
@@ -36,6 +37,9 @@ class HydraVpnService : VpnService() {
             builder.addDnsServer("1.1.1.1")
             builder.addDnsServer("8.8.8.8")
             
+            // Bypass the proxy app itself so it can connect to the internet
+            builder.addDisallowedApplication(applicationContext.packageName)
+            
             vpnInterface = builder
                 .setSession("HydraGate")
                 .setBlocking(true)
@@ -43,6 +47,7 @@ class HydraVpnService : VpnService() {
 
             val fd = vpnInterface?.fd
             if (fd != null) {
+                isRunning = true
                 Log.d(TAG, "VPN established. FD: $fd")
                 passFdToRust(fd)
             } else {
@@ -59,6 +64,7 @@ class HydraVpnService : VpnService() {
         } catch (e: Exception) {
             Log.e(TAG, "Error closing VPN interface", e)
         }
+        isRunning = false
         vpnInterface = null
         stopSelf()
     }

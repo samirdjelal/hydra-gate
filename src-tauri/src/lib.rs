@@ -37,6 +37,7 @@ pub fn run() {
             commands::remove_proxy,
             commands::start_vpn,
             commands::stop_vpn,
+            commands::get_vpn_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

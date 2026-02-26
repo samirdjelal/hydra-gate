@@ -91,6 +91,20 @@ export function SettingsPage({ isServerActive }: SettingsPageProps) {
         });
         invoke<string>("get_listen_host").then(h => setListenHost(h as "127.0.0.1" | "0.0.0.0"));
         invoke<string>("get_rotation_mode").then(m => setActiveMode(m as ModeId));
+
+        // Poll VPN Status
+        const fetchVpnStatus = async () => {
+            try {
+                const status = await invoke<boolean>("get_vpn_status");
+                setIsVpnActive(status);
+            } catch (e) {
+                // Ignore gracefully on desktop where command might fail if not implemented nicely
+            }
+        };
+        fetchVpnStatus();
+        const vpnInterval = setInterval(fetchVpnStatus, 1500);
+
+        return () => clearInterval(vpnInterval);
     }, []);
 
     // ── Port handlers ────────────────────────────────────────────────────────
@@ -145,15 +159,17 @@ export function SettingsPage({ isServerActive }: SettingsPageProps) {
     // ── VPN Handler ─────────────────────────────────────────────────────────
     const toggleVpn = async () => {
         const newState = !isVpnActive;
+        // Optimistic UI update, polling will fix it if it fails
+        setIsVpnActive(newState);
         try {
             if (newState) {
                 await invoke("start_vpn");
             } else {
                 await invoke("stop_vpn");
             }
-            setIsVpnActive(newState);
         } catch (e) {
             console.error(e);
+            setIsVpnActive(!newState);
             alert("Failed to toggle VPN (Is this running on Android?)");
         }
     };

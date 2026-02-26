@@ -47,4 +47,8 @@ class MainActivity : TauriActivity() {
         serviceIntent.action = "STOP_VPN"
         startService(serviceIntent)
     }
+
+    fun isVpnServiceRunning(): Boolean {
+        return HydraVpnService.isRunning
+    }
 }

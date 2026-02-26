@@ -76,3 +76,19 @@ pub fn stop_vpn() -> Result<(), String> {
 pub fn stop_vpn() -> Result<(), String> {
     Err("VPN Service is only supported on Android".into())
 }
+
+#[cfg(target_os = "android")]
+pub fn get_vpn_status() -> Result<bool, String> {
+    let mut status = false;
+    run_on_main_activity(|env, instance| {
+        let res = env.call_method(instance, "isVpnServiceRunning", "()Z", &[])?;
+        status = res.z()?;
+        Ok(())
+    })?;
+    Ok(status)
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn get_vpn_status() -> Result<bool, String> {
+    Ok(false)
+}
