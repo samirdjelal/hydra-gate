@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
     Settings, X, AlertTriangle, CheckCircle2,
-    Shuffle, BarChart2, Gauge, Scale, Link2, Pin, Globe, Lock, Network
+    Shuffle, BarChart2, Gauge, Scale, Link2, Pin, Globe, Lock
 } from "lucide-react";
 
 interface SettingsPageProps {
@@ -81,8 +81,7 @@ export function SettingsPage({ isServerActive }: SettingsPageProps) {
     const [activeMode, setActiveMode] = useState<ModeId>("round_robin");
     const [savingMode, setSavingMode] = useState<ModeId | null>(null);
 
-    // ── VPN state ───────────────────────────────────────────────────────────
-    const [isVpnActive, setIsVpnActive] = useState(false);
+
 
     useEffect(() => {
         invoke<number>("get_listen_port").then(p => {
@@ -92,19 +91,6 @@ export function SettingsPage({ isServerActive }: SettingsPageProps) {
         invoke<string>("get_listen_host").then(h => setListenHost(h as "127.0.0.1" | "0.0.0.0"));
         invoke<string>("get_rotation_mode").then(m => setActiveMode(m as ModeId));
 
-        // Poll VPN Status
-        const fetchVpnStatus = async () => {
-            try {
-                const status = await invoke<boolean>("get_vpn_status");
-                setIsVpnActive(status);
-            } catch (e) {
-                // Ignore gracefully on desktop where command might fail if not implemented nicely
-            }
-        };
-        fetchVpnStatus();
-        const vpnInterval = setInterval(fetchVpnStatus, 1500);
-
-        return () => clearInterval(vpnInterval);
     }, []);
 
     // ── Port handlers ────────────────────────────────────────────────────────
@@ -156,23 +142,7 @@ export function SettingsPage({ isServerActive }: SettingsPageProps) {
         }
     };
 
-    // ── VPN Handler ─────────────────────────────────────────────────────────
-    const toggleVpn = async () => {
-        const newState = !isVpnActive;
-        // Optimistic UI update, polling will fix it if it fails
-        setIsVpnActive(newState);
-        try {
-            if (newState) {
-                await invoke("start_vpn");
-            } else {
-                await invoke("stop_vpn");
-            }
-        } catch (e) {
-            console.error(e);
-            setIsVpnActive(!newState);
-            alert("Failed to toggle VPN (Is this running on Android?)");
-        }
-    };
+
 
     const isDirty = portInput !== String(savedPort);
     const portNum = parseInt(portInput, 10);
@@ -192,31 +162,7 @@ export function SettingsPage({ isServerActive }: SettingsPageProps) {
                 </div>
             </div>
 
-            {/* ── Android VPN Mode ─────────────────────────────────────────────────── */}
-            <div className="gradient-border bg-hydra-card rounded-2xl overflow-hidden p-5 flex items-center justify-between">
-                <div>
-                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                        <Network className="w-4 h-4 text-blue-400" /> System VPN Mode
-                    </h3>
-                    <p className="text-xs text-gray-400 mt-1 max-w-[250px]">
-                        Route all Android device traffic through HydraGate. (Requires system permission)
-                    </p>
-                </div>
 
-                <button
-                    onClick={toggleVpn}
-                    className={`
-                        group relative flex items-center gap-2.5 px-4 py-2 rounded-xl font-semibold text-sm
-                        transition-all duration-300 outline-none
-                        ${isVpnActive
-                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/25 hover:bg-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.15)]'
-                            : 'bg-hydra-dark text-gray-400 border border-hydra-border hover:border-gray-500 hover:text-white hover:bg-hydra-card-hover'
-                        }
-                    `}
-                >
-                    <span>{isVpnActive ? 'VPN Active' : 'Enable VPN'}</span>
-                </button>
-            </div>
 
             {/* ── Listen Endpoint (Interface + Port unified card) ───────────── */}
             <div className="gradient-border bg-hydra-card rounded-2xl overflow-hidden">

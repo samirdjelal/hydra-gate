@@ -2,7 +2,6 @@ pub mod commands;
 pub mod crypto;
 pub mod engine;
 pub mod state;
-pub mod android;
 
 use crate::engine::{start_health_checker, ProxyServer};
 use crate::state::ProxyPool;
@@ -35,9 +34,6 @@ pub fn run() {
             commands::get_rotation_mode,
             commands::set_rotation_mode,
             commands::remove_proxy,
-            commands::start_vpn,
-            commands::stop_vpn,
-            commands::get_vpn_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

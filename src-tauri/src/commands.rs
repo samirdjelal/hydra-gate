@@ -82,17 +82,3 @@ pub fn remove_proxy(pool: State<ProxyPool>, id: String) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub fn start_vpn() -> Result<(), String> {
-    crate::android::start_vpn()
-}
-
-#[tauri::command]
-pub fn stop_vpn() -> Result<(), String> {
-    crate::android::stop_vpn()
-}
-
-#[tauri::command]
-pub fn get_vpn_status() -> Result<bool, String> {
-    crate::android::get_vpn_status()
-}
