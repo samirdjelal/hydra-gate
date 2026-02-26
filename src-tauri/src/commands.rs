@@ -1,4 +1,4 @@
-use crate::state::{Proxy, ProxyPool};
+use crate::state::{Proxy, ProxyPool, RotationMode};
 use tauri::State;
 use crate::engine::ProxyServer;
 use uuid::Uuid;
@@ -44,5 +44,18 @@ pub fn set_listen_port(server: State<ProxyServer>, port: u16) -> Result<(), Stri
         return Err("Port must be >= 1024".to_string());
     }
     server.set_port(port);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_rotation_mode(server: State<ProxyServer>) -> Result<String, String> {
+    Ok(server.get_rotation_mode())
+}
+
+#[tauri::command]
+pub fn set_rotation_mode(server: State<ProxyServer>, mode: String) -> Result<(), String> {
+    let parsed = RotationMode::from_str(&mode)
+        .ok_or_else(|| format!("Unknown rotation mode: {}", mode))?;
+    server.set_rotation_mode(parsed);
     Ok(())
 }

@@ -28,8 +28,8 @@ export function ProxyList({ proxies }: ProxyListProps) {
                 <div className="w-14 h-14 rounded-2xl bg-hydra-surface border border-hydra-border flex items-center justify-center mb-4">
                     <ServerOff className="w-7 h-7 text-gray-700" />
                 </div>
-                <p className="font-medium text-gray-500">No upstream proxies yet</p>
-                <p className="text-sm text-gray-700 mt-1">Click <span className="text-hydra-accent">Add Proxy</span> to get started.</p>
+                <p className="font-medium text-gray-400">No upstream proxies yet</p>
+                <p className="text-sm text-gray-500 mt-1">Click <span className="text-hydra-accent">Add Proxy</span> to get started.</p>
             </div>
         );
     }

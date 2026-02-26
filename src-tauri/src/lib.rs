@@ -29,6 +29,8 @@ pub fn run() {
             commands::toggle_listener,
             commands::get_listen_port,
             commands::set_listen_port,
+            commands::get_rotation_mode,
+            commands::set_rotation_mode,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
