@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/banner.png" alt="HydraGate Banner" width="100%" />
+  <img src="images/banner.jpg" alt="HydraGate Banner" width="100%" />
 </p>
 
 <h1 align="center">HydraGate</h1>
